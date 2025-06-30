@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Face Detection with Age & Gender</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    body {
+      background-image: url('background.jpg');
+      background-size: cover;
+      font-family: Arial, sans-serif;
+      color: white;
+      text-align: center;
+      padding: 50px;
+    }
+    h1 {
+      font-size: 3em;
+      margin-bottom: 20px;
+    }
+    #video, #overlay {
+      border: 2px solid white;
+      width: 80%;
+      max-width: 600px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1.2em;
+      background-color: rgba(255, 255, 255, 0.7);
+      border: none;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover {
+      background-color: rgba(255, 255, 255, 1);
+    }
+    .video-container {
+      position: relative;
+      display: inline-block;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Face Detection with Age & Gender</h1>
+  <div class="video-container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
+  <br>
+  <button id="startButton">Start Detection</button>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const startButton = document.getElementById('startButton');
+
+    // Load all required models
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri('./models'),
+      faceapi.nets.faceLandmark68Net.loadFromUri('./models'),
+      faceapi.nets.ageGenderNet.loadFromUri('./models')
+    ])
+    .then(startVideo)
+    .catch(err => alert('Failed to load models: ' + err));
+
+    function startVideo() {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => video.srcObject = stream)
+        .catch(err => alert('Camera access denied: ' + err));
+    }
+
+    startButton.addEventListener('click', () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withAgeAndGender();
+
+        const resized = faceapi.resizeResults(detections, {
+          width: canvas.width,
+          height: canvas.height
+        });
+
+        const context = canvas.getContext('2d');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        faceapi.draw.drawDetections(canvas, resized);
+        faceapi.draw.drawFaceLandmarks(canvas, resized);
+
+        resized.forEach(result => {
+          const { age, gender, genderProbability } = result;
+          const box = result.detection.box;
+          const label = `${gender} (${Math.round(genderProbability * 100)}%), Age: ${Math.round(age)}`;
+          const drawBox = new faceapi.draw.DrawBox(box, { label });
+          drawBox.draw(canvas);
+        });
+      }, 200);
+    });
+  </script>
+</body>
+</html>
